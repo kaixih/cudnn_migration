@@ -1,0 +1,22 @@
+# python byte codes #
+#####################
+*.pyc
+*.pyo
+
+# text editor temporary files "
+#####################
+*~
+*#
+*.swp
+
+# compiled files #
+#####################
+*.o
+*.out
+*.so
+*.class
+
+# OS files #
+#####################
+.DS_Store
+.DS_Store?
