@@ -8,3 +8,22 @@ Differing from the offical samples, this repo contains self-contained code
 samples to demonstrate the one-to-one mapping of v7 legacy APIs and its
 corresponding v8 frontend API. To make the code easy to read, I restrain the use
 of function nesting, template, branches, command arguments, etc.
+
+# Usage
+In general, every `xxx_v7_xxx.cpp` corresponds to a `xxx_v8_xxx.cpp` and the
+`Makefile` shows how to compile them. When running the executable, we can
+specify which algorithm (v7) or which engine (v8) for the convolution. For
+example,
+
+- Compile the code with v8 frontend APIs and use the 0th engine.
+```bash
+$ make cudnn_v8_conv2d_fwd_float.out
+$ ./cudnn_v8_conv2d_fwd_float.out 0
+```
+
+- Compile the code with v7 legacy APIs and use the 0th engine.
+
+```bash
+$ make cudnn_v7_conv2d_fwd_float.out
+$ ./cudnn_v7_conv2d_fwd_float.out 0
+```
