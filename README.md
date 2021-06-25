@@ -13,7 +13,9 @@ of function nesting, template, branches, command arguments, etc.
 In general, every `xxx_v7_xxx.cpp` corresponds to a `xxx_v8_xxx.cpp` and the
 `Makefile` shows how to compile them. When running the executable, we can
 specify which algorithm (v7) or which engine (v8) for the convolution. They are
-supposed to generate same results when the inputs are same. For example,
+supposed to generate same results when the inputs are equal. Note, the "same"
+outputs don't mean bitwise same but the difference between two numbers is under
+a small acceptable tolerance. For example,
 
 - Compile the code with v8 frontend APIs and use the 0th engine.
 ```bash
