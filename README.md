@@ -21,7 +21,7 @@ $ make cudnn_v8_conv2d_fwd_float.out
 $ ./cudnn_v8_conv2d_fwd_float.out 0
 ```
 
-- Compile the code with v7 legacy APIs and use the 0th engine.
+- Compile the code with v7 legacy APIs and use the 0th algorithm.
 
 ```bash
 $ make cudnn_v7_conv2d_fwd_float.out
