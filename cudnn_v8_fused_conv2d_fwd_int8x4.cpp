@@ -108,9 +108,11 @@ int main(int argc, char const *argv[]) {
   const int tensor_ndims = 4;
   int64_t x_dims[] = {N, C / vector_cnt, H, W};
   int64_t w_dims[] = {K, C / vector_cnt, R, S};
+  int64_t b_dims[] = {N, K / vector_cnt, 1, 1};
   int64_t y_dims[tensor_ndims];
   int64_t x_strides[tensor_ndims];
   int64_t y_strides[tensor_ndims];
+  int64_t b_strides[tensor_ndims];
   int64_t w_strides[tensor_ndims];
   y_dims[0] = x_dims[0];
   y_dims[1] = w_dims[0] / vector_cnt;
@@ -121,12 +123,15 @@ int main(int argc, char const *argv[]) {
   }
   generateStrides(x_dims, x_strides, tensor_ndims, tensorFormat);
   generateStrides(y_dims, y_strides, tensor_ndims, tensorFormat);
+  generateStrides(b_dims, b_strides, tensor_ndims, tensorFormat);
   generateStrides(w_dims, w_strides, tensor_ndims, tensorFormat);
 
   printf("LOG >>> Input  dims (resized): (%ld, %ld, %ld, %ld)\n",
          x_dims[0], x_dims[1], x_dims[2], x_dims[3]);
   printf("LOG >>> Filter dims (resized): (%ld, %ld, %ld, %ld)\n",
          w_dims[0], w_dims[1], w_dims[2], w_dims[3]);
+  printf("LOG >>> Bias   dims (resized): (%ld, %ld, %ld, %ld)\n",
+         b_dims[0], b_dims[1], b_dims[2], b_dims[3]);
   printf("LOG >>> Output dims (resized): (%ld, %ld, %ld, %ld)\n",
          y_dims[0], y_dims[1], y_dims[2], y_dims[3]);
 
@@ -152,6 +157,16 @@ int main(int argc, char const *argv[]) {
                       .build();
   checkCUDNN(tensor_y.get_status());
 
+  auto tensor_z = cudnn_frontend::TensorBuilder()
+                      .setDim(tensor_ndims, y_dims)
+                      .setStrides(tensor_ndims, y_strides)
+                      .setId('z')
+                      .setAlignment(32)
+                      .setDataType(dataType)
+                      .setVectorCountandDimension(vector_cnt, vector_dim)
+                      .build();
+  checkCUDNN(tensor_z.get_status());
+
   auto tensor_w = cudnn_frontend::TensorBuilder()
                       .setDim(tensor_ndims, w_dims)
                       .setStrides(tensor_ndims, w_strides)
@@ -161,6 +176,49 @@ int main(int argc, char const *argv[]) {
                       .setVectorCountandDimension(vector_cnt, vector_dim)
                       .build();
   checkCUDNN(tensor_w.get_status());
+
+  auto tensor_b = cudnn_frontend::TensorBuilder()
+                      .setDim(tensor_ndims, b_dims)
+                      .setStrides(tensor_ndims, b_strides)
+                      .setId('b')
+                      .setAlignment(32)
+                      .setDataType(dataType)
+                      .setVectorCountandDimension(vector_cnt, vector_dim)
+                      .build();
+  checkCUDNN(tensor_b.get_status());
+
+  auto tensor_conv = cudnn_frontend::TensorBuilder()
+                         .setDim(tensor_ndims, y_dims)
+                         .setStrides(tensor_ndims, y_strides)
+	                       .setVirtual()
+                         .setId('C')
+                         .setAlignment(32)
+                         .setDataType(dataType)
+                         .setVectorCountandDimension(vector_cnt, vector_dim)
+                         .build();
+  checkCUDNN(tensor_conv.get_status());
+
+  auto tensor_add = cudnn_frontend::TensorBuilder()
+                        .setDim(tensor_ndims, y_dims)
+                        .setStrides(tensor_ndims, y_strides)
+	                      .setVirtual()
+                        .setId('A')
+                        .setAlignment(32)
+                        .setDataType(dataType)
+                        .setVectorCountandDimension(vector_cnt, vector_dim)
+                        .build();
+  checkCUDNN(tensor_add.get_status());
+
+  auto tensor_bias = cudnn_frontend::TensorBuilder()
+                         .setDim(tensor_ndims, y_dims)
+                         .setStrides(tensor_ndims, y_strides)
+	                       .setVirtual()
+                         .setId('B')
+                         .setAlignment(32)
+                         .setDataType(dataType)
+                         .setVectorCountandDimension(vector_cnt, vector_dim)
+                         .build();
+  checkCUDNN(tensor_bias.get_status());
 
   auto conv_desc = cudnn_frontend::ConvDescBuilder()
                        .setDataType(computeType)
@@ -176,9 +234,10 @@ int main(int argc, char const *argv[]) {
   auto conv_direction = CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR;
   const float alpha = 1.0;
   const float beta = 0.0;
+  const float alpha2 = 0.0;
   auto conv_op = cudnn_frontend::OperationBuilder(conv_direction)
                      .setxDesc(tensor_x)
-                     .setyDesc(tensor_y)
+                     .setyDesc(tensor_conv)
                      .setwDesc(tensor_w)
                      .setcDesc(conv_desc)
                      .setAlpha(alpha)
@@ -186,7 +245,52 @@ int main(int argc, char const *argv[]) {
                      .build();
   checkCUDNN(conv_op.get_status());
 
-  std::array<cudnn_frontend::Operation const *, 1> ops = {&conv_op};
+  auto add_desc = cudnn_frontend::PointWiseDescBuilder()
+                      .setMode(CUDNN_POINTWISE_ADD)
+                      .setMathPrecision(dataType)
+                      .build();
+  checkCUDNN(add_desc.get_status());
+
+  auto pointwise_mode =CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR;
+  auto add_op = cudnn_frontend::OperationBuilder(pointwise_mode)
+                    .setxDesc(conv_op.getOutputTensor())
+                    .setbDesc(tensor_z)
+                    .setyDesc(tensor_add)
+                    .setpwDesc(add_desc)
+                    .setAlpha(alpha)
+                    .setAlpha2(alpha2)
+                    .build();
+  checkCUDNN(add_op.get_status());
+
+  auto bias_desc = cudnn_frontend::PointWiseDescBuilder()
+                       .setMode(CUDNN_POINTWISE_ADD)
+                       .setMathPrecision(dataType)
+                       .build();
+  checkCUDNN(bias_desc.get_status());
+
+  auto bias_op = cudnn_frontend::OperationBuilder(pointwise_mode)
+                     .setxDesc(add_op.getOutputTensor())
+                     .setbDesc(tensor_b)
+                     .setyDesc(tensor_bias)
+                     .setpwDesc(bias_desc)
+                     .build();
+  checkCUDNN(bias_op.get_status());
+
+  auto activation_desc = cudnn_frontend::PointWiseDescBuilder()
+                             .setMode(CUDNN_POINTWISE_RELU_FWD)
+                             .setMathPrecision(dataType)
+                             .build();
+  checkCUDNN(activation_desc.get_status());
+
+	auto activation_op = cudnn_frontend::OperationBuilder(pointwise_mode)
+                           .setxDesc(bias_op.getOutputTensor())
+                           .setyDesc(tensor_y)
+                           .setpwDesc(activation_desc)
+                           .build();
+  checkCUDNN(activation_op.get_status());
+
+	std::array<cudnn_frontend::Operation const*, 4> ops =
+      {&conv_op, &add_op, &bias_op, &activation_op};
   auto op_graph = cudnn_frontend::OperationGraphBuilder()
                       .setHandle(cudnn)
                       .setOperationGraph(ops.size(), ops.data())
@@ -246,30 +350,35 @@ int main(int argc, char const *argv[]) {
 
   int x_size = vector_cnt * x_dims[0] * x_dims[1] * x_dims[2] * x_dims[3];
   int y_size = vector_cnt * y_dims[0] * y_dims[1] * y_dims[2] * y_dims[3];
+  int b_size = vector_cnt * b_dims[0] * b_dims[1] * b_dims[2] * b_dims[3];
   int w_size = vector_cnt * w_dims[0] * w_dims[1] * w_dims[2] * w_dims[3];
 
   int x_bytes = x_size * sizeof(INT_T);
   int y_bytes = y_size * sizeof(INT_T);
+  int b_bytes = b_size * sizeof(INT_T);
   int w_bytes = w_size * sizeof(INT_T);
 
   INT_T *x;
   INT_T *y;
+  INT_T *b;
   INT_T *w;
   checkCUDA(cudaMallocManaged(&x, x_bytes));
   checkCUDA(cudaMallocManaged(&y, y_bytes));
+  checkCUDA(cudaMallocManaged(&b, b_bytes));
   checkCUDA(cudaMallocManaged(&w, w_bytes));
 
   srand(3);
   init_input(x, x_size);
   init_input(y, y_size);
+  init_input(b, b_size);
   init_input(w, w_size);
 
-  void * data_ptrs[] = {x, y, w};
-  int64_t uids[] = {'x', 'y', 'w'};
+  void * data_ptrs[] = {x, y, w, y, b};
+  int64_t uids[] = {'x', 'y', 'w', 'z', 'b'};
   auto variant_pack = cudnn_frontend::VariantPackBuilder()
                           .setWorkspacePointer(d_workspace)
-                          .setDataPointers(3, data_ptrs)
-                          .setUids(3, uids)
+                          .setDataPointers(5, data_ptrs)
+                          .setUids(5, uids)
                           .build();
   checkCUDNN(variant_pack.get_status());
 
@@ -279,6 +388,7 @@ int main(int argc, char const *argv[]) {
   print_output(y, y_size, "Y out:", -1);
 
   checkCUDA(cudaFree(w));
+  checkCUDA(cudaFree(b));
   checkCUDA(cudaFree(y));
   checkCUDA(cudaFree(x));
   if (workspace_bytes != 0) {
