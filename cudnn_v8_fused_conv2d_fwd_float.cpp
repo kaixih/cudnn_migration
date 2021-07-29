@@ -106,7 +106,7 @@ int main(int argc, char const *argv[]) {
   const int tensor_ndims = 4;
   int64_t x_dims[] = {N, C, H, W};
   int64_t w_dims[] = {K, C, R, S};
-  int64_t b_dims[] = {N, K, 1, 1};
+  int64_t b_dims[] = {1, K, 1, 1};
   int64_t y_dims[tensor_ndims];
   int64_t x_strides[tensor_ndims];
   int64_t y_strides[tensor_ndims];
