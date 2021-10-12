@@ -216,6 +216,27 @@ int main(int argc, char const *argv[]) {
   cudnn_frontend::filter(fallback_configs, filtered_configs, filter_fn);
   printf("LOG >>> Engines size (filtered): %ld\n", filtered_configs.size());
 
+#define MANUAL_REORDER
+#ifdef MANUAL_REORDER
+  auto json_handle = json::parse(R"(
+                         { "version" : 1, 
+                           "rules"   : 
+                             [ 
+                                 { "rule_id"             : "ConvFwd_eng0", 
+                                   "operation"           : "ConvFwd",
+                                   "engine"              : 0, 
+                                   "knob"                : [],
+                                   "cudnn_version_start" : 8000, 
+                                   "cudnn_version_end"   : 8300 
+                                 }
+                             ] 
+                         })");
+  auto check_int8x32 = [](cudnnDataType_t type, int vector_count) {
+      return type == CUDNN_DATA_INT8 && vector_count == 32;
+    };
+  auto fn = std::bind(check_int8x32, dataType, vector_cnt);
+#endif
+
   std::vector<cudnn_frontend::ExecutionPlan> workable_plans;
   for (int i = 0; i < filtered_configs.size(); i++) {
     auto plan = cudnn_frontend::ExecutionPlanBuilder()
@@ -228,6 +249,12 @@ int main(int argc, char const *argv[]) {
       printf("Fail\n");
       continue;
     } else {
+#ifdef MANUAL_REORDER
+      if (cudnn_frontend::check_errata(json_handle, plan.getTag(), cudnn, fn)) {
+        printf("Fail (int8x32 not supported)\n");
+        continue;
+      }
+#endif
       printf("Success\n");
     }
     workable_plans.push_back(std::move(plan));
