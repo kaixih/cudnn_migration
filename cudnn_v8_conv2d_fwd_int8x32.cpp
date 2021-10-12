@@ -259,18 +259,25 @@ int main(int argc, char const *argv[]) {
   checkCUDA(cudaMallocManaged(&y, y_bytes));
   checkCUDA(cudaMallocManaged(&w, w_bytes));
 
-  INT_T *reordered_w;
-  checkCUDA(cudaMallocManaged(&reordered_w, w_bytes));
-  auto reorder_status = cudnn_frontend::cudnnReorderFilterAndBiasInt8x32(
-      cudnn, tensor_w, conv_desc, w, reordered_w, nullptr, nullptr);
-  checkCUDNN(reorder_status);
-
+  
   srand(3);
   init_input(x, x_size);
   init_input(y, y_size);
   init_input(w, w_size);
 
+#ifdef MANUAL_REORDER
+  INT_T *reordered_w;
+  checkCUDA(cudaMallocManaged(&reordered_w, w_bytes));
+  auto reorder_status = cudnn_frontend::cudnnReorderFilterAndBiasInt8x32(
+      cudnn, tensor_w, conv_desc, w, reordered_w, nullptr, nullptr);
+  checkCUDNN(reorder_status);
+#endif
+
+#ifdef MANUAL_REORDER
   void * data_ptrs[] = {x, y, reordered_w};
+#else
+  void * data_ptrs[] = {x, y, w};
+#endif
   int64_t uids[] = {'x', 'y', 'w'};
   auto variant_pack = cudnn_frontend::VariantPackBuilder()
                           .setWorkspacePointer(d_workspace)
@@ -285,7 +292,9 @@ int main(int argc, char const *argv[]) {
   print_output(y, y_size, "Y out:", -1);
 
   checkCUDA(cudaFree(w));
+#ifdef MANUAL_REORDER
   checkCUDA(cudaFree(reordered_w));
+#endif
   checkCUDA(cudaFree(y));
   checkCUDA(cudaFree(x));
   if (workspace_bytes != 0) {
