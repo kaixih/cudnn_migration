@@ -172,6 +172,7 @@ int main(int argc, char const *argv[]) {
   init_input(y, y_size);
   init_input(w, w_size);
 
+#ifdef MANUAL_REORDER
   // To use IMMA, the filter and bias are required to be reordered.
   INT_T *reordered_w;
   checkCUDA(cudaMallocManaged(&reordered_w, w_bytes));
@@ -185,6 +186,7 @@ int main(int argc, char const *argv[]) {
                                        /*reorderedBiasData=*/nullptr));
   checkCUDNN(cudnnSetConvolutionReorderType(/*convDesc=*/convolution_descriptor, 
                                             /*reorderType=*/CUDNN_NO_REORDER));
+#endif
 
   const float alpha = 1.0;
   const float beta = 0.0;
@@ -193,7 +195,11 @@ int main(int argc, char const *argv[]) {
                                      /*xDesc=*/input_descriptor,
                                      /*x=*/x,
                                      /*wDesc=*/kernel_descriptor,
+#ifdef MANUAL_REORDER
                                      /*w=*/reordered_w,
+#else
+                                     /*w=*/w,
+#endif
                                      /*convDesc=*/convolution_descriptor,
                                      /*algo=*/convolution_algorithm,
                                      /*workSpace=*/d_workspace,
@@ -205,7 +211,9 @@ int main(int argc, char const *argv[]) {
   print_output(y, y_size, "Y out:", -1);
 
   checkCUDA(cudaFree(w));
+#ifdef MANUAL_REORDER
   checkCUDA(cudaFree(reordered_w));
+#endif
   checkCUDA(cudaFree(y));
   checkCUDA(cudaFree(x));
   if (workspace_bytes != 0) {
