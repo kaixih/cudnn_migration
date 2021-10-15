@@ -90,8 +90,8 @@ int main(int argc, char const *argv[]) {
     plan_idx = atoi(argv[1]);
   }
 
-  int N = 1, C = 32, H = 16, W = 16;
-  int K = 64, R = 3, S = 3;
+  int N = 7, C = 64, H = 21, W = 21;
+  int K = 32, R = 3, S = 3;
 
   int64_t conv_pads[] = {0, 0};
   int64_t conv_strides[] = {1, 1};
