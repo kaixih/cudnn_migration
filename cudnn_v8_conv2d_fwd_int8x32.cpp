@@ -159,6 +159,9 @@ int main(int argc, char const *argv[]) {
                       .setAlignment(32)
                       .setDataType(dataType)
                       .setVectorCountAndDimension(vector_cnt, vector_dim)
+#if (CUDNN_VERSION >= 8300)
+                      .setReorderType(CUDNN_TENSOR_REORDERING_INT8x32)
+#endif
                       .build();
   checkCUDNN(tensor_w.get_status());
 
