@@ -2,6 +2,9 @@
 CUDNN_FRONTEND_DIR=/home/cudnn_frontend/include/
 CXXFLAGS=-DNV_CUDNN_DISABLE_EXCEPTION -lcudnn
 
+cudnn_v7_fused_ops.out: cudnn_v7_fused_ops.cpp
+	nvcc $< -o $@ -I ${CUDNN_FRONTEND_DIR} ${CXXFLAGS}
+
 cudnn_v8_conv2d_fwd_float.out: cudnn_v8_conv2d_fwd_float.cpp
 	nvcc $< -o $@ -I ${CUDNN_FRONTEND_DIR} ${CXXFLAGS}
 
